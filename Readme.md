@@ -6,9 +6,8 @@ Requirments
 * Wiringpi2-Python
 
 Run from LXTerminal with the following command
-`
-# gksudo ./Relay.py
-`
+
+`# gksudo ./Relay.py`
 
 Support:
 openmicors.org
