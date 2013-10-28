@@ -5,5 +5,10 @@ Requirments
 * WiringPi2 
 * Wiringpi2-Python
 
+Run from LXTerminal with the following command
+`
+# gksudo ./Relay.py
+`
+
 Support:
 openmicors.org
