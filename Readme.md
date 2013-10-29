@@ -10,4 +10,4 @@ Run from LXTerminal with the following command
 `# gksudo ./Relay.py`
 
 Support:
-openmicors.org
+openmicros.org
