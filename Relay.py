@@ -13,6 +13,9 @@
 import Tkinter as tk
 import argparse
 import wiringpi2
+import serial
+import threading
+import Queue
 
 class Relay:
     """Relay Gui Class
@@ -37,6 +40,14 @@ class Relay:
     _lowBImageFile = "lowB.gif"
     _highBImageFile = "highB.gif"
     
+    # Serial bits
+    _port = '/dev/ttyAMA0'
+    _baudrate = 9600
+    _devID = '--'
+    _llapA = 'D02'
+    _llapB = 'D03'
+    _llapHigh = 'HIGH'
+    _llapLow = 'LOW'
     
     def __init__(self):
         """Initilaize
@@ -50,8 +61,10 @@ class Relay:
     def on_execute(self):
         self._checkArgs()
         self._initIO()
+        self._initSerial()
         self._runGUI()
         self._cleanIO()
+        self._cleanSerial()
     
     def _runGUI(self):
         self._debugPrint("Run GUI")
@@ -61,6 +74,9 @@ class Relay:
         self._master.resizable(0,0)
     
         self._displayRelay()
+        
+        # start serial
+        self._processQueue()
         
         self._master.mainloop()
 
@@ -132,6 +148,56 @@ class Relay:
     def _on_end(self):
         self._debugPrint("Clean up GUI")
         self._master.destroy()
+
+    def _initSerial(self):
+        self._debugPrint("Strting Serial connection")
+        self._sDisconnect = threading.Event()
+        self._sQueue = Queue.Queue()
+        self._sThread = threading.Thread(target=self._serialThread)
+        self._s = serial.Serial()
+        self._s.baudrate = self._baudrate
+        self._s.port = self._port
+        try:
+            self._s.open()
+            self._sThread.start()
+        except serial.SerialException, e:
+            self._debugPrint("Could not open port %r: %s\n" % (self._port, e))
+
+    def _serialThread(self):
+        while not self._sDisconnect.isSet():
+            if self._s.isOpen():
+                if self._s.inWaiting():
+                    llapMsg = self._s.read()
+                    if llapMsg == 'a':
+                        llapMsg += self._s.read(11)
+                        self._sQueue.put({'devID': llapMsg[1:3],
+                                          'data': llapMsg[3:].rstrip("-")}
+                                         )
+                        self._debugPrint("Got LLAP {}".format(llapMsg))
+            self._sDisconnect.wait(0.01)
+        self._s.close()
+    
+    def _processQueue(self):
+        while self._sQueue.qsize():
+            msg = self._sQueue.get()
+            if msg['devID'] == self._devID:
+                if msg['data'][0:3] == self._llapA:
+                    if msg['data'][3:] == self._llapHigh:
+                        self._relayOn(self._relayAIO)
+                    elif msg['data'][3:] == self._llapLow:
+                        self._relayOff(self._relayAIO)
+                elif msg['deta'][0:3] == self._llapB:
+                    if msg['data'][3:] == self._llapHigh:
+                        self._relayOn(self._relayBIO)
+                    elif msg['data'][3:] == self._llapLow:
+                        self._relayOff(self._relayBIO)
+            self._sQueue.task_done()
+        self._master.after(100, self._processQueue)
+
+    def _cleanSerial():
+        self._debugPrint("Clean up Serial")
+        self._sDisconnect.set()
+        self._serialThread.join()
 
     def _initIO(self):
         self._debugPrint("Init IO")
